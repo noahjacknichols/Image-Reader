@@ -1,4 +1,5 @@
 from lxml import html, etree
+from pathlib import Path
 import cv2
 import requests
 import os
@@ -11,23 +12,13 @@ except:
 if os.name == 'nt':
     pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-
-
-def filterImage(image):
-    return image
-
-
-def ocr_core(filename):
-    text = pytesseract.image_to_string(Image.open(filename))
-    return text
+'''
+TODO:
+-> Look for some kind of multipurpose classification model, or try to build my own..
+-> Documenting and saving functions (implement tagging if possible)
+'''
 
 # print(ocr_core('images/ocr_example_1.jpg'))
-'''
-uses requests and lxml to get imageLinks on a given website.
-then checks if it's the absolute or relative path.
-This fails on websites like Facebook where they hide images in
-javascript functions (where the actual images are not presented in the HTML)
-'''
 
 def getImageLinks(website):
     page = requests.get(website)
@@ -75,8 +66,29 @@ def downloadImage(imageLink):
         print("Issue occured while getting image {}".format(filename))
     return
 
+def grayscaleImage(image):
+    img = cv2.imread(image)
+    grayScaled = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    ret,thresh = cv2.threshold(grayScaled, 127, 255, cv2.THRESH_BINARY)
+    cv2.imshow('thresh',thresh)
+    cv2.imshow('Original image', img)
+    cv2.imshow('Gray image', grayScaled)
+    cv2.waitKey(0)
+    
+    return Image.fromarray(grayScaled)
 
-# print(imageLinks)
+#image must be a PIL image
+def getImageText(image):
+    text = pytesseract.image_to_string(image)
+    return text
+
+def saveText(title, text, location = '/text/',attachment = '.txt'):
+    location = os.getcwd() + location + attachment
+    Path(location).mkdir(parents=True, exist_ok=True)
+    with open(location+title, 'w', encoding='UTF-8') as file:
+        file.write(text)
+    return
+
 def main():
     imageLinks = getImageLinks("https://twitter.com/imgur?ref_src=twsrc%5Egoogle%7Ctwcamp%5Eserp%7Ctwgr%5Eauthor")
     for link in imageLinks:
@@ -88,19 +100,6 @@ def main():
         print("Seems to be an issue downloading images from the website.")
 # downloadImage("https://scontent.fykz1-2.fna.fbcdn.net/v/t1.0-1/p720x720/37761468_10157914956042588_4029176324378591232_n.jpg")
 
-
-def grayscaleImage(image):
-    img = cv2.imread(image)
-    grayScaled = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    cv2.imshow('Original image', img)
-    cv2.imshow('Gray image', grayScaled)
-    cv2.waitKey(0)
-    cv2.imwrite('grayScale/'+image, grayScaled)
-    return 'grayScale/'+image.split('/')[:-1]
-
-# x = Image.open('images\scrapedImages\\alpine-4553488__340.jpg')
-# print(x)
-# grayscaleImage('images\scrapedImages\\alpine-4553488__340.jpg') 
-
-print(getLocalImages())
+# print(os.getcwd())
+saveText('title',getImageText('images/text.png'))
 
