@@ -1,3 +1,11 @@
+
+import pyttsx3
+engine = pyttsx3.init()
+
+def readText(text):
+    engine.say(text)
+    engine.runAndWait()
+
 def detect_text(path):
     """Detects text in the file."""
     from google.cloud import vision
@@ -26,5 +34,10 @@ def detect_text(path):
             '{}\nFor more info on error messages, check: '
             'https://cloud.google.com/apis/design/errors'.format(
                 response.error.message))
+    return texts
 
-detect_text("./images/yoda.jpg")
+text = detect_text("./images/book-hard.jpg")
+print("here")
+print(text[0].description)
+readText(text[0].description.replace("\n", " "))
+
