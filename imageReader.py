@@ -14,10 +14,11 @@ import argparse
 
 engine = pyttsx3.init()
 
-def decode_predictions(scores, geometry):
+def decode_predictions(scores, geometry, args):
     (numRows, numCols) = scores.shape[2:4]
     rects = []
     confidences = []
+
     for y in range(0, numRows):
         scoresData = scores[0,0,y]
         xData0 = geometry[0,0,y]
@@ -33,6 +34,7 @@ def decode_predictions(scores, geometry):
             angle = anglesData[x]
             cos = np.cos(angle)
             sin = np.sin(angle)
+
             h = xData0[x] + xData2[x]
             w = xData1[x] + xData3[x]
 
@@ -43,6 +45,7 @@ def decode_predictions(scores, geometry):
 
             rects.append((startX, startY, endX, endY))
             confidences.append(scoresData[x])
+
     return (rects, confidences)
 
 
@@ -64,14 +67,6 @@ def getArgs():
     return args
 
 
-def getImageText(filename):
-    print("opening " + filename + "...")
-    img = cv2.imread(filename)
-    img = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-    cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 2)
-    text = pytesseract.image_to_string(Image.open(filename))
-
-    return text
 
 def readText(text):
     engine.say(text)
@@ -79,35 +74,64 @@ def readText(text):
 
 
 
-def text_func():
-    t = getImageText("./images/yoda.jpg")
-    print(t)
-    readText(t)
-    print("finished")
-
 def getText(boxes, rW, rH, args, origW, origH, orig):
     results = []
-    config = ("-l eng --oem 1 --psm 7")
-
     for (startX, startY, endX, endY) in boxes:
+        # scale the bounding box coordinates based on the respective
+        # ratios
         startX = int(startX * rW)
         startY = int(startY * rH)
         endX = int(endX * rW)
         endY = int(endY * rH)
 
+        # in order to obtain a better OCR of the text we can potentially
+        # apply a bit of padding surrounding the bounding box -- here we
+        # are computing the deltas in both the x and y directions
         dX = int((endX - startX) * args["padding"])
         dY = int((endY - startY) * args["padding"])
 
+        # apply padding to each side of the bounding box, respectively
         startX = max(0, startX - dX)
         startY = max(0, startY - dY)
         endX = min(origW, endX + (dX * 2))
         endY = min(origH, endY + (dY * 2))
 
+        # extract the actual padded ROI
         roi = orig[startY:endY, startX:endX]
+
+        # in order to apply Tesseract v4 to OCR text we must supply
+        # (1) a language, (2) an OEM flag of 4, indicating that the we
+        # wish to use the LSTM neural net model for OCR, and finally
+        # (3) an OEM value, in this case, 7 which implies that we are
+        # treating the ROI as a single line of text
+        config = ("-l eng --oem 1 --psm 7")
         text = pytesseract.image_to_string(roi, config=config)
+
+        # add the bounding box coordinates and OCR'd text to the list
+        # of results
         results.append(((startX, startY, endX, endY), text))
-        return results
+    return results
         
+def printResults(results, orig):
+    for ((startX, startY, endX, endY), text) in results:
+        # display the text OCR'd by Tesseract
+        print("OCR TEXT")
+        print("========")
+        print("{}\n".format(text))
+
+        # strip out non-ASCII text so we can draw the text on the image
+        # using OpenCV, then draw the text and a bounding box surrounding
+        # the text region of the input image
+        text = "".join([c if ord(c) < 128 else "" for c in text]).strip()
+        output = orig.copy()
+        cv2.rectangle(output, (startX, startY), (endX, endY),
+            (0, 0, 255), 2)
+        cv2.putText(output, text, (startX, startY - 20),
+            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
+
+        # show the output image
+        cv2.imshow("Text Detection", output)
+        cv2.waitKey(0)
 
 
 
@@ -117,6 +141,7 @@ def parseImg():
     image = cv2.imread(args["image"])
     orig = image.copy()
     (origH, origW) = image.shape[:2]
+
     (newW, newH) = (args["width"], args["height"])
     rW = origW / float(newW)
     rH = origH / float(newH)
@@ -129,12 +154,20 @@ def parseImg():
     print("loading EAST text detector...")
     net = cv2.dnn.readNet(args["east"])
 
-    blob = cv2.dnn.blobFromImage(image, 1.0, (W, H), (123.68, 116.78, 103.94), swapRB=True, crop=False)
+    blob = cv2.dnn.blobFromImage(image, 1.0, (W, H),
+	(123.68, 116.78, 103.94), swapRB=True, crop=False)
     net.setInput(blob)
     (scores, geometry) = net.forward(layerNames)
 
-    (rects, confidences) = decode_predictions(scores, geometry)
+    (rects, confidences) = decode_predictions(scores, geometry, args)
     boxes = non_max_suppression(np.array(rects), probs=confidences)
-    getText(boxes, rW, rH, args, origW, origH, orig)
+    results = getText(boxes, rW, rH, args, origW, origH, orig)
+    # results = sorted(results, key=lambda r:r[0][1])
+    for result in results:
+        print(result[1])
+    printResults(results, orig)
 
+
+
+parseImg()
 
