@@ -13,11 +13,11 @@ async function quickstart() {
     const client = new vision.ImageAnnotatorClient();
     fileName = '';
     // Performs text detection on the local file
-    const [result] = await client.textDetection(`gs://declr-bucket/preface.jpg`);
+    const [result] = await client.textDetection(`gs://my-bucket69/preface.jpg`);
     const detections = result.textAnnotations;
-    console.log('Text:');
+    // console.log('Text:');
     // detections.forEach(text => console.log(text));
-    console.log(detections[0].description);
+    // console.log(detections[0].description);
 
     return detections[0].description
   }
